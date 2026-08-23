@@ -1,18 +1,15 @@
-/* tests/analysis.c — wiring: Analysis (generic) + Arith (a field) = reals as rational enclosures.
+/* tests/analysis.c — reals as rational enclosures, type-first. No field is wired; Analysis stacks on Arith
+   directly, and a value carries the Real tag. The op refuses a foreign carrier.
    SPDX-License-Identifier: MIT OR Apache-2.0 */
 #include <stdio.h>
 #include "cse/analysis.h"
-#include "cse/field.h"
 #include "cse/arith.h"
+#include "cse/types.h"
 #include "prime.h"
 #include "slate/psda.h"
 
 static int fails = 0;
 #define CHECK(c, m) do { if (!(c)) { printf("  FAIL %s\n", (m)); fails++; } } while (0)
-
-static const cse_field Q = {
-  cse_arith_add, cse_arith_sub, cse_arith_mul, cse_arith_neg, cse_arith_inv, cse_arith_div
-};
 
 static slate_psda arena[1024];
 static slate_psda *pool;
@@ -32,9 +29,13 @@ int main(void) {
 
   slate_psda *sqrt2 = cse_real(&pool, Qv(1, 1), Qv(3, 2));
   CHECK(bounds(sqrt2, 1, 1, 3, 2), "√2 ∈ [1, 3/2] (an enclosure of rationals)");
-  CHECK(bounds(cse_real_add(&Q, &pool, sqrt2, sqrt2), 2, 1, 3, 1), "√2 + √2 ∈ [2, 3]");
-  CHECK(bounds(cse_real_add(&Q, &pool, cse_real_lift(&pool, Qv(1,2)), cse_real_lift(&pool, Qv(1,3))), 5, 6, 5, 6),
+  CHECK(bounds(cse_real_add(&pool, sqrt2, sqrt2), 2, 1, 3, 1), "√2 + √2 ∈ [2, 3]");
+  CHECK(bounds(cse_real_add(&pool, cse_real_lift(&pool, Qv(1,2)), cse_real_lift(&pool, Qv(1,3))), 5, 6, 5, 6),
         "1/2 + 1/3 = [5/6, 5/6]");
+
+  /* type-first: a value has the Real tag, and add restricts its carrier to Reals */
+  CHECK(cse_type_has(sqrt2, cse_real_type()) != 0, "a value has type Real");
+  CHECK(cse_real_add(&pool, Qv(1,1), sqrt2) == 0, "add refuses a ℚ where a Real is required");
 
   printf(fails ? "analysis: FAIL\n" : "analysis: ok\n");
   return fails ? 1 : 0;
